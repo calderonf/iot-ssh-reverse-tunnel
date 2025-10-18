@@ -1,0 +1,4 @@
+# Ejemplo de línea en ~iot-tunnel/.ssh/authorized_keys
+# Vincula un dispositivo a un puerto concreto y evita PTY/agent.
+# Ajusta device_id y port para tu inventario real.
+permitlisten="0.0.0.0:10001",no-agent-forwarding,no-pty,command="/usr/local/bin/tunnel-only.sh device_id=EXAMPLE-DEVICE port=10001" ssh-ed25519 AAAAC3Nz... comentario-dispositivo

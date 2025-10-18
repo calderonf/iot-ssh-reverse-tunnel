@@ -61,6 +61,7 @@ yarn-error.log*
 # SSH keys (seguridad - nunca commitear claves)
 *.pem
 *.key
+*.pub
 *_rsa
 *_dsa
 *_ecdsa
@@ -68,6 +69,10 @@ yarn-error.log*
 tunnel_key
 tunnel_key.*
 !*.key.example
+
+# claves y artefactos sensibles
+**/secrets/**
+**/.env
 
 # Datos sensibles
 device_mapping
