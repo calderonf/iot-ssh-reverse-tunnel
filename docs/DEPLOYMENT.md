@@ -90,17 +90,24 @@ sudo chmod +x security/*.sh
 ### Paso 4: Configurar SSH
 
 ```bash
-# Copiar configuración SSH
-sudo cp server/configs/ssh_config /etc/ssh/sshd_config.d/iot-tunnel.conf
+# Copiar configuración endurecida
+sudo cp server/configs/sshd_config.d/iot-tunnel.conf /etc/ssh/sshd_config.d/
 
-# Verificar configuración
+# Ajusta la lista `PermitListen` dentro del archivo para reflejar los puertos autorizados.
+
+# (Opcional) Instalar script de contención
+sudo cp server/scripts/tunnel-only.sh /usr/local/bin/
+sudo chmod 755 /usr/local/bin/tunnel-only.sh
+
+# Verificar sintaxis
 sudo sshd -t
 
-# Reiniciar SSH (Debian/Ubuntu)
-sudo systemctl restart ssh
+# Recargar servicio tras cambios de configuración
+# Debian / Ubuntu
+sudo systemctl reload ssh
 
-# Reiniciar SSH (RHEL/CentOS/Amazon Linux)
-sudo systemctl restart sshd
+# RHEL / CentOS / Amazon Linux
+sudo systemctl reload sshd
 
 # Verificar que está escuchando
 sudo ss -tlnp | grep :22
@@ -191,7 +198,7 @@ sudo apt-get install -y openssh-client autossh git
 ```bash
 # Clonar el repositorio
 cd /opt
-sudo git clone https://github.com/your-org/iot-ssh-reverse-tunnel.git
+sudo git clone https://github.com/calderonf/iot-ssh-reverse-tunnel.git
 cd iot-ssh-reverse-tunnel
 
 # Establecer permisos
@@ -393,7 +400,7 @@ apt-get install -y openssh-client autossh git
 
 # Clonar repositorio
 cd /opt
-git clone https://github.com/your-org/iot-ssh-reverse-tunnel.git
+git clone https://github.com/calderonf/iot-ssh-reverse-tunnel.git
 cd iot-ssh-reverse-tunnel
 chmod +x client/scripts/*.sh security/*.sh
 

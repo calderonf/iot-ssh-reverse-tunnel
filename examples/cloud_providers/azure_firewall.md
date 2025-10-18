@@ -137,7 +137,7 @@ sudo apt-get upgrade -y
 
 # Clonar repositorio
 cd /opt
-sudo git clone https://github.com/your-org/iot-ssh-reverse-tunnel.git
+sudo git clone https://github.com/calderonf/iot-ssh-reverse-tunnel.git
 cd iot-ssh-reverse-tunnel
 
 # Ejecutar configuración según DEPLOYMENT.md
