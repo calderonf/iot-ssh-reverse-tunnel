@@ -66,7 +66,6 @@ Sistema completo de conectividad remota para dispositivos IoT mediante túneles 
 
 ```bash
 # 1. Clonar repositorio
-cd /opt
 git clone https://github.com/calderonf/iot-ssh-reverse-tunnel.git
 cd iot-ssh-reverse-tunnel
 
@@ -88,7 +87,6 @@ sudo chown iot-tunnel:iot-tunnel /var/log/iot-ssh-tunnel
 
 ```bash
 # 1. Clonar repositorio
-cd /opt
 git clone https://github.com/calderonf/iot-ssh-reverse-tunnel.git
 cd iot-ssh-reverse-tunnel
 
