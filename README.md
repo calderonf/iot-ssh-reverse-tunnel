@@ -67,7 +67,7 @@ Sistema completo de conectividad remota para dispositivos IoT mediante túneles 
 ```bash
 # 1. Clonar repositorio
 cd /opt
-git clone https://github.com/your-org/iot-ssh-reverse-tunnel.git
+git clone https://github.com/calderonf/iot-ssh-reverse-tunnel.git
 cd iot-ssh-reverse-tunnel
 
 # 2. Crear usuario dedicado
@@ -89,7 +89,7 @@ sudo chown iot-tunnel:iot-tunnel /var/log/iot-ssh-tunnel
 ```bash
 # 1. Clonar repositorio
 cd /opt
-git clone https://github.com/your-org/iot-ssh-reverse-tunnel.git
+git clone https://github.com/calderonf/iot-ssh-reverse-tunnel.git
 cd iot-ssh-reverse-tunnel
 
 # 2. Generar Device ID
