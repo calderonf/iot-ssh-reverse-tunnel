@@ -1,0 +1,57 @@
+[Unit]
+Description=IoT SSH Reverse Tunnel Service
+Documentation=https://github.com/your-org/iot-ssh-reverse-tunnel
+After=network-online.target ssh.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+
+# Directorio de trabajo
+WorkingDirectory=/etc/iot-ssh-tunnel
+
+# Variables de entorno para autossh
+Environment="AUTOSSH_GATETIME=0"
+Environment="AUTOSSH_PORT=0"
+
+# Script de inicio del túnel
+ExecStart=/usr/local/bin/iot-tunnel-start.sh
+
+# Script de detención
+ExecStop=/usr/local/bin/iot-tunnel-stop.sh
+
+# Reinicio automático en caso de fallo
+Restart=always
+RestartSec=30
+
+# Límites de reintentos
+StartLimitInterval=300
+StartLimitBurst=5
+
+# Configuración de timeouts
+TimeoutStartSec=60
+TimeoutStopSec=30
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=iot-ssh-tunnel
+
+# Seguridad
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/log/iot-ssh-tunnel /var/run/iot-ssh-tunnel /etc/iot-ssh-tunnel
+
+# Hardening adicional
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictRealtime=true
+RestrictNamespaces=true
+
+[Install]
+WantedBy=multi-user.target

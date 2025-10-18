@@ -1,0 +1,61 @@
+# Configuración SSH del Servidor para Túneles SSH Inversos IoT
+# Ubicación: /etc/ssh/sshd_config.d/iot-tunnel.conf
+
+# Puerto SSH (cambiar si se requiere puerto no estándar)
+Port 22
+
+# Direcciones de escucha
+ListenAddress 0.0.0.0
+ListenAddress ::
+
+# Autenticación
+PubkeyAuthentication yes
+PasswordAuthentication no
+PermitEmptyPasswords no
+ChallengeResponseAuthentication no
+
+# Usuario dedicado para túneles IoT
+Match User iot-tunnel
+    # Permitir port forwarding para túneles inversos
+    AllowTcpForwarding yes
+    GatewayPorts no
+
+    # Deshabilitar funcionalidades no necesarias
+    X11Forwarding no
+    AllowAgentForwarding no
+    PermitTTY no
+
+    # Forzar comando específico (opcional - descomentar si se usa)
+    # ForceCommand /usr/local/bin/tunnel-only.sh
+
+    # Limitar túneles al rango de puertos asignado
+    PermitOpen localhost:10000-20000
+
+    # Keep-alive para mantener conexiones activas
+    ClientAliveInterval 30
+    ClientAliveCountMax 3
+
+    # Límites de sesiones concurrentes
+    MaxSessions 100
+    MaxStartups 100:30:200
+
+# Configuración de logging
+SyslogFacility AUTH
+LogLevel VERBOSE
+
+# Configuración de seguridad adicional
+StrictModes yes
+PermitRootLogin no
+MaxAuthTries 3
+
+# Keep-alive global
+TCPKeepAlive yes
+
+# Timeouts
+LoginGraceTime 2m
+
+# Configuración de claves
+PubkeyAcceptedKeyTypes ssh-ed25519,ecdsa-sha2-nistp256,ecdsa-sha2-nistp384,ecdsa-sha2-nistp521,ssh-rsa
+
+# Banner (opcional)
+# Banner /etc/ssh/banner.txt

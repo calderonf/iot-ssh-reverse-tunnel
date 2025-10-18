@@ -1,0 +1,105 @@
+# Claude Code directory
+.claude/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Log files
+*.log
+logs/
+*.log.*
+
+# Runtime data
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# Backup files
+*.bak
+*.backup
+*.old
+*.orig
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# System files
+Thumbs.db
+desktop.ini
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+.terraform.lock.hcl
+
+# SSH keys (seguridad - nunca commitear claves)
+*.pem
+*.key
+*_rsa
+*_dsa
+*_ecdsa
+*_ed25519
+tunnel_key
+tunnel_key.*
+!*.key.example
+
+# Datos sensibles
+device_mapping
+!device_mapping.example
+authorized_keys
+known_hosts
+*.secret
+*.credentials
+
+# Build artifacts
+dist/
+build/
+*.o
+*.so
+*.dylib
+*.exe
+*.dll
+
+# Archivos de estado y runtime
+*.pid
+*.sock
+*.state
+*.dat
+
+# Metrics y datos
+metrics/
+*.metrics
+*.json
+!*.example.json
+
+# Backups
+backups/
+*.tar.gz
+*.zip
+*.tgz
