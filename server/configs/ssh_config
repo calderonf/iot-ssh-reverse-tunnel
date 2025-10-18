@@ -16,20 +16,27 @@ ChallengeResponseAuthentication no
 
 # Usuario dedicado para túneles IoT
 Match User iot-tunnel
-    # Permitir port forwarding para túneles inversos
-    AllowTcpForwarding yes
-    GatewayPorts no
-
-    # Deshabilitar funcionalidades no necesarias
+    AllowTcpForwarding remote
+    GatewayPorts clientspecified       # Permite 0.0.0.0 o IP concreta si el cliente lo pide
     X11Forwarding no
     AllowAgentForwarding no
     PermitTTY no
 
-    # Forzar comando específico (opcional - descomentar si se usa)
+    # Enumerar puertos permitidos para -R:
+    PermitListen 10000
+    PermitListen 10001
+    PermitListen 10002
+
+    ClientAliveInterval 30
+    ClientAliveCountMax 3
+    MaxSessions 100
+
     # ForceCommand /usr/local/bin/tunnel-only.sh
 
-    # Limitar túneles al rango de puertos asignado
-    PermitOpen localhost:10000-20000
+    # ForceCommand /usr/local/bin/tunnel-only.sh
+
+    # Limitar túneles al rango de puertos 10000-20000 (patrones soportados por sshd)
+    PermitOpen localhost:1???? localhost:20000
 
     # Keep-alive para mantener conexiones activas
     ClientAliveInterval 30

@@ -79,7 +79,7 @@ sudo chown iot-tunnel:iot-tunnel /var/run/iot-ssh-tunnel
 ```bash
 # Clonar el repositorio
 cd /opt
-sudo git clone https://github.com/your-org/iot-ssh-reverse-tunnel.git
+sudo git clone https://github.com/calderonf/iot-ssh-reverse-tunnel.git
 cd iot-ssh-reverse-tunnel
 
 # Establecer permisos de ejecución
@@ -96,7 +96,10 @@ sudo cp server/configs/ssh_config /etc/ssh/sshd_config.d/iot-tunnel.conf
 # Verificar configuración
 sudo sshd -t
 
-# Reiniciar SSH
+# Reiniciar SSH (Debian/Ubuntu)
+sudo systemctl restart ssh
+
+# Reiniciar SSH (RHEL/CentOS/Amazon Linux)
 sudo systemctl restart sshd
 
 # Verificar que está escuchando
