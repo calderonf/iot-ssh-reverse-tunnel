@@ -153,6 +153,55 @@ En el **servidor**:
 ssh -p 10001 localhost
 ```
 
+## Servidor (OpenSSH)
+
+1. Copiar `server/configs/sshd_config.d/iot-tunnel.conf` a `/etc/ssh/sshd_config.d/` (o integrar manualmente).
+2. (Opcional) Copiar `server/scripts/tunnel-only.sh` a `/usr/local/bin/` y dar `0755`.
+3. (Opcional) Crear `/etc/iot-ssh-tunnel/ports.allow`.
+4. Añadir líneas `authorized_keys` con `permitlisten=...` por dispositivo.
+5. Validar y recargar:
+
+   ```bash
+   sudo sshd -t
+   sudo systemctl reload sshd
+   sudo journalctl -u ssh -n 100 --no-pager
+   ```
+
+## Cliente (autossh)
+
+- Reemplaza las variables en `client/examples/autossh-expose-ssh.sh` (`SERVER_HOST`, `SERVER_PORT`, `REMOTE_PORT`, `SSH_USER`, `KEY_PATH`).
+- Comando equivalente sin script:
+
+  ```bash
+  autossh -M 0 -N \
+    -o "ServerAliveInterval=30" -o "ServerAliveCountMax=3" \
+    -i /etc/iot-ssh-tunnel/tunnel_key \
+    -R 0.0.0.0:10001:127.0.0.1:22 \
+    iot-tunnel@<<SERVER_PUBLIC_IP_OR_DNS>> -p 22
+  ```
+- Acceso desde el servidor (o Internet):
+
+  ```bash
+  ssh -p 10001 <<DEVICE_USER>>@<<SERVER_PUBLIC_IP_OR_DNS>>
+  ```
+
+## Seguridad
+
+- Usa `GatewayPorts clientspecified` + `PermitListen` (sin comodines).
+- Recomendado: `authorized_keys` con `permitlisten=` por clave.
+- Limita puertos en el firewall (ej. `ufw allow 10001/tcp` solo desde IPs administrativas).
+- Evita `ssh-rsa` salvo clientes legacy.
+
+## Systemd (cliente)
+
+```bash
+sudo cp client/examples/autossh-expose-ssh.sh /usr/local/bin/
+sudo chmod +x /usr/local/bin/autossh-expose-ssh.sh
+sudo cp client/systemd/autossh-iot-tunnel.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now autossh-iot-tunnel.service
+```
+
 ## Estructura del Proyecto
 
 ```
