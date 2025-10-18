@@ -99,7 +99,8 @@ sudo cp server/configs/sshd_config.d/iot-tunnel.conf /etc/ssh/sshd_config.d/
 sudo cp server/scripts/tunnel-only.sh /usr/local/bin/
 sudo chmod 755 /usr/local/bin/tunnel-only.sh
 
-# Verificar sintaxis
+# Verificar sintaxis de la configuración SSH
+# Este comando comprueba que no haya errores en los archivos de configuración antes de aplicarlos
 sudo sshd -t
 
 # Recargar servicio tras cambios de configuración
@@ -108,6 +109,13 @@ sudo systemctl reload ssh
 
 # RHEL / CentOS / Amazon Linux
 sudo systemctl reload sshd
+
+# NOTA: Si el servicio SSH no está activo y obtienes el error "ssh.service is not active, cannot reload"
+# ejecuta los siguientes comandos para iniciar el servicio:
+#   sudo systemctl start ssh          # Inicia el servicio SSH
+#   sudo systemctl enable ssh         # Habilita el servicio para que inicie automáticamente en el arranque
+#   sudo systemctl status ssh         # Verifica que el servicio esté corriendo correctamente
+# Una vez que el servicio esté activo, podrás usar 'reload' para aplicar cambios de configuración sin interrumpir conexiones existentes
 
 # Verificar que está escuchando
 sudo ss -tlnp | grep :22
