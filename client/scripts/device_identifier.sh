@@ -249,7 +249,23 @@ main() {
                 show_help
                 exit 1
             fi
-            generate_custom_id "$2"
+
+            # Generar el ID personalizado
+            local custom_id
+            custom_id=$(generate_custom_id "$2")
+
+            if [[ $? -eq 0 ]]; then
+                # Guardar en /etc/iot-ssh-tunnel/device_id
+                echo "${custom_id}" > "${DEVICE_ID_FILE}"
+                chmod 600 "${DEVICE_ID_FILE}"
+                log_info "Device ID personalizado guardado en ${DEVICE_ID_FILE}"
+
+                # Mostrar el ID generado
+                echo "${custom_id}"
+            else
+                log_error "Error al generar ID personalizado"
+                exit 1
+            fi
             ;;
         validate)
             if [[ $# -lt 2 ]]; then

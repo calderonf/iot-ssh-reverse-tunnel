@@ -93,7 +93,10 @@ sudo chmod +x security/*.sh
 # Copiar configuración endurecida
 sudo cp server/configs/sshd_config.d/iot-tunnel.conf /etc/ssh/sshd_config.d/
 
-# Ajusta la lista `PermitListen` dentro del archivo para reflejar los puertos autorizados.
+# Ajusta la lista `PermitListen` dentro del archivo para reflejar los puertos autorizados. por defecto solo hay 3, 
+#PermitListen 10000
+#PermitListen 10001
+#PermitListen 10002
 
 # (Opcional) Instalar script de contención
 sudo cp server/scripts/tunnel-only.sh /usr/local/bin/
@@ -119,6 +122,12 @@ sudo systemctl reload sshd
 
 # Verificar que está escuchando
 sudo ss -tlnp | grep :22
+```
+del ùltimo comando deberìa salir algo como:
+```bash
+usuario@EquipoServidor:/etc/ssh/sshd_config.d$ sudo ss -tlnp | grep :22
+LISTEN 0      4096         0.0.0.0:22        0.0.0.0:*    users:(("sshd",pid=11870,fd=3),("systemd",pid=1,fd=64))
+LISTEN 0      4096            [::]:22           [::]:*    users:(("sshd",pid=11870,fd=4),("systemd",pid=1,fd=65))
 ```
 
 ### Paso 5: Inicializar Sistema de Registro
@@ -187,6 +196,7 @@ sudo systemctl start iot-tunnel-monitor
 # Verificar estado
 sudo systemctl status iot-tunnel-monitor
 ```
+Si esta trabajando en una màquina virtual en la nube, por favor abra los puertos correspondientes
 
 ## Configuración de Dispositivos IoT
 
