@@ -13,10 +13,10 @@
 ### Servidor Central
 
 **Hardware:**
-- CPU: 2 vCPUs mínimo
-- RAM: 4GB mínimo
-- Disco: 50GB mínimo
-- Red: IP pública estática
+- CPU: 1 vCPUs mínimo
+- RAM: 1GB mínimo
+- Disco: 30GB mínimo
+- Red: IP pública estática se hacen pruebas con máquina Standard_B1s de azure
 
 **Software:**
 - Sistema operativo: Debian 11+ o Ubuntu 20.04+
