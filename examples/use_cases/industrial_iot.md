@@ -42,15 +42,25 @@ Una empresa manufacturera necesita monitorear y mantener remotamente equipos IoT
 
 # Configurar servidor
 cd /opt
-git clone https://github.com/your-org/iot-ssh-reverse-tunnel.git
+git clone https://github.com/calderonf/iot-ssh-reverse-tunnel.git
 cd iot-ssh-reverse-tunnel
 
 # Crear usuario dedicado
 useradd -r -m -d /home/iot-tunnel -s /bin/bash iot-tunnel
 
 # Copiar configuración SSH
-cp server/configs/ssh_config /etc/ssh/sshd_config.d/iot-tunnel.conf
-systemctl restart sshd
+cp server/configs/sshd_config.d/iot-tunnel.conf /etc/ssh/sshd_config.d/
+
+# (Opcional) Instalar script de contención
+cp server/scripts/tunnel-only.sh /usr/local/bin/
+chmod 755 /usr/local/bin/tunnel-only.sh
+
+# Recargar servicio (ajusta según distribución)
+# Debian / Ubuntu
+sudo systemctl reload ssh
+
+# RHEL / CentOS / Amazon Linux
+sudo systemctl reload sshd
 
 # Iniciar monitor
 cp server/scripts/connection_monitor.sh /usr/local/bin/
@@ -69,7 +79,7 @@ apt-get install -y openssh-client autossh git
 
 # Clonar repositorio
 cd /opt
-git clone https://github.com/your-org/iot-ssh-reverse-tunnel.git
+git clone https://github.com/calderonf/iot-ssh-reverse-tunnel.git
 
 # Configurar permisos
 chmod +x /opt/iot-ssh-reverse-tunnel/client/scripts/*.sh

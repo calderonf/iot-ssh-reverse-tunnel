@@ -20,10 +20,10 @@
 
 ```bash
 # En el dispositivo: verificar estado del servicio
-systemctl status iot-ssh-tunnel
+systemctl status autossh-iot-tunnel || systemctl status iot-ssh-tunnel
 
 # Verificar logs
-journalctl -u iot-ssh-tunnel -n 50
+journalctl -u autossh-iot-tunnel -n 50 || journalctl -u iot-ssh-tunnel -n 50
 
 # Probar conexión SSH manualmente
 ssh -v -i /etc/iot-ssh-tunnel/tunnel_key \
@@ -38,8 +38,9 @@ telnet server.example.com 22
 
 1. **Verificar configuración:**
    ```bash
-   cat /etc/iot-ssh-tunnel/tunnel.conf
-   # Verificar SERVER_HOST, SERVER_PORT, TUNNEL_PORT
+   # Revisar parámetros del servicio instalado
+   systemctl cat autossh-iot-tunnel.service 2>/dev/null
+   systemctl cat iot-ssh-tunnel.service 2>/dev/null
    ```
 
 2. **Verificar clave SSH:**
@@ -90,8 +91,8 @@ watch -n 5 'ss -tn | grep :22'
 
 1. **Ajustar keep-alive:**
    ```bash
-   # En tunnel.conf
-   SSH_OPTIONS="-o ServerAliveInterval=15 -o ServerAliveCountMax=5"
+   # En el script o servicio de autossh, ajusta los parámetros
+   -o "ServerAliveInterval=15" -o "ServerAliveCountMax=5"
    ```
 
 2. **Verificar MTU:**
@@ -130,28 +131,21 @@ tail -f /var/log/auth.log
 
 1. **Verificar configuración del túnel:**
    ```bash
-   # El formato correcto es:
-   ssh -R REMOTE_PORT:localhost:22 user@server
-
-   # NO:
-   ssh -R REMOTE_PORT:127.0.0.1:22 user@server
+   # El comando debe exponer explícitamente la IP remota autorizada
+   ssh -R 0.0.0.0:REMOTE_PORT:127.0.0.1:22 user@server
    ```
 
 2. **Verificar GatewayPorts:**
    ```bash
-   # En servidor /etc/ssh/sshd_config
-   # Debe ser:
-   GatewayPorts no
-
-   # Para usuario iot-tunnel
-   Match User iot-tunnel
-       GatewayPorts no
+   # En servidor /etc/ssh/sshd_config.d/iot-tunnel.conf
+   # Debe estar presente dentro del bloque Match
+   GatewayPorts clientspecified
    ```
 
-3. **Verificar restricciones de PermitOpen:**
+3. **Verificar restricciones de PermitListen:**
    ```bash
-   # En authorized_keys debe permitir el puerto
-   permitopen="localhost:10001"
+   # En authorized_keys el puerto autorizado debe coincidir
+   permitlisten="0.0.0.0:10001"
    ```
 
 ### 4. Servicio No Inicia Automáticamente
@@ -497,7 +491,13 @@ ps aux | grep ssh
 
 # Reinicio completo
 systemctl restart iot-ssh-tunnel
-systemctl restart sshd  # En servidor
+
+# Reiniciar servicio SSH según distribución
+# Debian / Ubuntu
+sudo systemctl restart ssh
+
+# RHEL / CentOS / Amazon Linux
+sudo systemctl restart sshd
 
 # Verificación de configuración
 sshd -t  # Servidor

@@ -17,34 +17,44 @@ Este sistema implementa los siguientes principios de seguridad:
 **Configuración recomendada** (`/etc/ssh/sshd_config.d/iot-tunnel.conf`):
 
 ```
-# Autenticación solo por clave pública
+# /etc/ssh/sshd_config.d/iot-tunnel.conf
+
+Port 22
+ListenAddress 0.0.0.0
+ListenAddress ::
+
 PubkeyAuthentication yes
 PasswordAuthentication no
-PermitEmptyPasswords no
 ChallengeResponseAuthentication no
+PermitEmptyPasswords no
 
-# Deshabilitar acceso root
+StrictModes yes
 PermitRootLogin no
+MaxAuthTries 3
+LoginGraceTime 2m
+SyslogFacility AUTHPRIV
+LogLevel VERBOSE
+TCPKeepAlive yes
 
-# Protocolo SSH 2 únicamente
-Protocol 2
+MaxStartups 100:30:200
 
-# Cifrados fuertes
-Ciphers chacha20-poly1305@openssh.com,aes256-gcm@openssh.com,aes128-gcm@openssh.com
-MACs hmac-sha2-512-etm@openssh.com,hmac-sha2-256-etm@openssh.com
-KexAlgorithms curve25519-sha256,diffie-hellman-group-exchange-sha256
+PubkeyAcceptedAlgorithms ssh-ed25519,ecdsa-sha2-nistp256,ecdsa-sha2-nistp384,ecdsa-sha2-nistp521
 
-# Usuario dedicado con restricciones
 Match User iot-tunnel
-    AllowTcpForwarding yes
-    GatewayPorts no
+    PermitTTY no
     X11Forwarding no
     AllowAgentForwarding no
-    PermitTTY no
-    PermitOpen localhost:10000-20000
+    AllowTcpForwarding remote
+    GatewayPorts clientspecified
+    PermitListen 10001
+    PermitListen 10002
+    PermitListen 10003
     ClientAliveInterval 30
     ClientAliveCountMax 3
+    MaxSessions 100
 ```
+
+> Ajusta la lista de `PermitListen` para reflejar los puertos aprobados en tu despliegue. Evita comodines o rangos amplios.
 
 ### Clientes
 
@@ -112,16 +122,15 @@ chmod 700 /home/iot-tunnel/.ssh
 **Formato recomendado:**
 
 ```
-command="echo 'Tunnel only'",no-agent-forwarding,no-X11-forwarding,no-pty,no-user-rc,permitopen="localhost:10001" ssh-ed25519 AAAAC3...
+permitlisten="0.0.0.0:10001",no-agent-forwarding,no-pty,command="/usr/local/bin/tunnel-only.sh device_id=EXAMPLE port=10001" ssh-ed25519 AAAAC3...
 ```
 
 **Restricciones:**
-- `command="..."`: Fuerza comando específico
+- `command="..."`: Fuerza comando específico (por ejemplo `tunnel-only.sh`)
 - `no-agent-forwarding`: Previene forwarding de SSH agent
 - `no-X11-forwarding`: Deshabilita X11
 - `no-pty`: Sin terminal interactivo
-- `no-user-rc`: No ejecutar ~/.ssh/rc
-- `permitopen="..."`: Solo permitir forwarding a puerto específico
+- `permitlisten="IP:PUERTO"`: Define el puerto remoto autorizado para el túnel
 
 ## Firewall y Seguridad de Red
 

@@ -23,10 +23,12 @@ server/
 ├── scripts/
 │   ├── device_registry.sh      - Registro y gestión de dispositivos
 │   ├── tunnel_manager.sh       - Gestión de túneles activos
-│   └── connection_monitor.sh   - Monitoreo de conexiones
+│   ├── connection_monitor.sh   - Monitoreo de conexiones
+│   └── tunnel-only.sh          - Contención para sesiones de túnel
 └── configs/
-    ├── ssh_config              - Configuración SSH del servidor
-    └── device_mapping          - Mapeo dispositivo -> puerto
+    ├── sshd_config.d/
+    │   └── iot-tunnel.conf     - Configuración endurecida para túneles inversos
+    └── device_mapping.example  - Plantilla de mapeo dispositivo → puerto
 ```
 
 ### 2. Dispositivos IoT (Clientes)
@@ -47,9 +49,10 @@ client/
 │   ├── ssh_tunnel_setup.sh     - Configuración del túnel
 │   └── auto_reconnect.sh       - Sistema de reconexión
 └── systemd/
-    ├── iot-ssh-tunnel.service  - Servicio systemd
-    ├── iot-tunnel-start.sh     - Script de inicio
-    └── iot-tunnel-stop.sh      - Script de detención
+    ├── autossh-iot-tunnel.service - Servicio systemd basado en autossh
+    ├── iot-ssh-tunnel.service     - Servicio heredado gestionado por scripts
+    ├── iot-tunnel-start.sh        - Script de inicio
+    └── iot-tunnel-stop.sh         - Script de detención
 ```
 
 ### 3. Sistema de Seguridad
