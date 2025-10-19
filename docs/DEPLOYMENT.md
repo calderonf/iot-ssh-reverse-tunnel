@@ -1,12 +1,19 @@
-# Guía de Despliegue - Túneles SSH Inversos para IoT
+# Guía de Despliegue Detallada - Túneles SSH Inversos para IoT
+
+> **💡 ¿Buscas una guía rápida?** Consulta [FAST_DEPLOYMENT.md](FAST_DEPLOYMENT.md) para configuración en menos de 15 minutos.
+
+Esta guía proporciona información detallada sobre la instalación, configuración y operación del sistema de túneles SSH inversos. Incluye opciones avanzadas, troubleshooting extenso y mejores prácticas.
 
 ## Tabla de Contenidos
 
 1. [Requisitos Previos](#requisitos-previos)
 2. [Configuración del Servidor](#configuración-del-servidor)
 3. [Configuración de Dispositivos IoT](#configuración-de-dispositivos-iot)
-4. [Verificación y Testing](#verificación-y-testing)
-5. [Troubleshooting](#troubleshooting)
+   - [Método 1: Configuración Automática (Recomendada)](#método-1-configuración-automática-recomendada)
+   - [Método 2: Configuración Manual (Avanzada)](#método-2-configuración-manual-avanzada)
+4. [Acceso a Dispositivos](#acceso-a-dispositivos)
+5. [Verificación y Testing](#verificación-y-testing)
+6. [Troubleshooting](#troubleshooting)
 
 ## Requisitos Previos
 
@@ -199,6 +206,133 @@ sudo systemctl status iot-tunnel-monitor
 Si esta trabajando en una màquina virtual en la nube, por favor abra los puertos correspondientes
 
 ## Configuración de Dispositivos IoT
+
+Existen dos métodos para configurar los dispositivos IoT: **Configuración Automática (Recomendada)** y **Configuración Manual (Avanzada)**.
+
+---
+
+## Método 1: Configuración Automática (Recomendada)
+
+Este método utiliza un script interactivo que automatiza todo el proceso de configuración.
+
+### Paso 1: Preparación del Dispositivo
+
+```bash
+# Actualizar sistema
+sudo apt-get update
+sudo apt-get upgrade -y
+
+# Instalar dependencias
+sudo apt-get install -y openssh-client autossh git
+```
+
+### Paso 2: Clonar Repositorio
+
+```bash
+# Clonar el repositorio
+cd /opt
+sudo git clone https://github.com/calderonf/iot-ssh-reverse-tunnel.git
+cd iot-ssh-reverse-tunnel
+
+# Establecer permisos
+sudo chmod +x client/scripts/*.sh
+sudo chmod +x security/*.sh
+```
+
+### Paso 3: Ejecutar Script de Configuración Automática
+
+```bash
+# Ejecutar el script de configuración interactiva
+sudo /opt/iot-ssh-reverse-tunnel/client/scripts/setup_client.sh
+```
+
+El script solicitará la siguiente información:
+- **IP o hostname del servidor SSH**: Ejemplo: `tunnel.example.com`
+- **Puerto SSH del servidor**: Por defecto `22`
+- **Usuario SSH del servidor**: Por defecto `iot-tunnel`
+- **Cadena adicional para Device ID**: Opcional, para personalizar el ID
+
+### Paso 4: Registrar Dispositivo en el Servidor
+
+El script mostrará la información necesaria para registrar el dispositivo:
+
+**En el dispositivo** verás algo como:
+
+```
+╔════════════════════════════════════════════════════════════════════════╗
+║  INFORMACIÓN PARA REGISTRAR EL DISPOSITIVO EN EL SERVIDOR             ║
+╚════════════════════════════════════════════════════════════════════════╝
+
+1. Device ID:
+   a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6
+
+2. Clave Pública SSH:
+   ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI... iot-device-a1b2c3d4...
+
+3. Fingerprint:
+   SHA256:xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+**En el servidor**, ejecuta los comandos que muestra el script:
+
+```bash
+# 1. Crear archivo temporal con la clave pública
+cat > /tmp/device_a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6.pub << 'EOFKEY'
+ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI... iot-device-a1b2c3d4...
+EOFKEY
+
+# 2. Registrar el dispositivo
+sudo /opt/iot-ssh-reverse-tunnel/server/scripts/device_registry.sh register \
+    a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6 \
+    /tmp/device_a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6.pub
+
+# 3. Anotar el puerto asignado
+# Ejemplo de salida: Puerto asignado: 10001
+```
+
+### Paso 5: Completar Configuración
+
+**De vuelta en el dispositivo**, presiona ENTER e ingresa el puerto asignado:
+
+```
+Presione ENTER cuando haya registrado el dispositivo en el servidor...
+Ingrese el puerto asignado por el servidor: 10001
+```
+
+El script automáticamente:
+- ✓ Configurará el túnel SSH
+- ✓ Instalará el servicio systemd
+- ✓ Habilitará el inicio automático
+- ✓ Iniciará el servicio
+- ✓ Mostrará instrucciones de verificación
+
+### Paso 6: Verificar Instalación
+
+El script mostrará comandos de verificación al finalizar:
+
+**En el cliente (dispositivo IoT):**
+```bash
+# Ver estado del servicio
+sudo systemctl status iot-ssh-tunnel
+
+# Ver logs en tiempo real
+sudo journalctl -u iot-ssh-tunnel -f
+```
+
+**En el servidor:**
+```bash
+# Listar túneles activos
+sudo /opt/iot-ssh-reverse-tunnel/server/scripts/tunnel_manager.sh list active
+
+# Conectarse al dispositivo
+sudo /opt/iot-ssh-reverse-tunnel/server/scripts/tunnel_manager.sh login a1b2c
+```
+
+---
+
+## Método 2: Configuración Manual (Avanzada)
+
+Si prefieres configurar manualmente cada paso, sigue estas instrucciones:
 
 ### Paso 1: Preparación del Dispositivo
 
