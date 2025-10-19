@@ -330,37 +330,27 @@ copy_ssh_key_to_device() {
     local password="$3"
 
     # Verificar si existe clave SSH del servidor
-    local ssh_key="${HOME}/.ssh/id_rsa.pub"
-    if [[ ! -f "${ssh_key}" ]]; then
-        ssh_key="${HOME}/.ssh/id_ed25519.pub"
-        if [[ ! -f "${ssh_key}" ]]; then
-            log_warning "No se encontró clave SSH pública. Generando nueva clave..."
+    local ssh_key_priv="${HOME}/.ssh/id_rsa"
+    if [[ ! -f "${ssh_key_priv}" ]]; then
+        ssh_key_priv="${HOME}/.ssh/id_ed25519"
+        if [[ ! -f "${ssh_key_priv}" ]]; then
+            log_info "Generando nueva clave SSH ed25519..."
             ssh-keygen -t ed25519 -f "${HOME}/.ssh/id_ed25519" -N "" -C "tunnel-manager@$(hostname)"
-            ssh_key="${HOME}/.ssh/id_ed25519.pub"
+            ssh_key_priv="${HOME}/.ssh/id_ed25519"
         fi
     fi
 
     log_info "Copiando clave SSH al dispositivo..."
 
-    # Usar sshpass si está disponible y se proporcionó contraseña
+    # Usar sshpass con ssh-copy-id si está disponible
     if command -v sshpass &> /dev/null && [[ -n "${password}" ]]; then
-        # Usar ssh-copy-id con sshpass
-        if sshpass -p "${password}" ssh-copy-id -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p "${port}" "${username}@localhost" 2>&1 | grep -q "Number of key(s) added:"; then
-            log_info "Clave SSH copiada exitosamente"
-            return 0
-        else
-            log_warning "No se pudo copiar la clave SSH automáticamente"
-            return 1
-        fi
+        sshpass -p "${password}" ssh-copy-id -f -i "${ssh_key_priv}" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p "${port}" "${username}@localhost"
+        return $?
     else
-        log_info "Ingrese la contraseña cuando se solicite:"
-        if ssh-copy-id -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p "${port}" "${username}@localhost"; then
-            log_info "Clave SSH copiada exitosamente"
-            return 0
-        else
-            log_warning "No se pudo copiar la clave SSH"
-            return 1
-        fi
+        # Modo interactivo
+        log_info "Ingrese la contraseña del dispositivo cuando se solicite:"
+        ssh-copy-id -f -i "${ssh_key_priv}" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p "${port}" "${username}@localhost"
+        return $?
     fi
 }
 
@@ -431,51 +421,20 @@ login_device() {
             return 1
         fi
 
-        # Intentar conexión inicial para validar credenciales
-        log_info "Validando credenciales..."
-        if command -v sshpass &> /dev/null; then
-            # Probar conexión con sshpass
-            if sshpass -p "${password}" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o BatchMode=yes -o ConnectTimeout=10 -p "${port}" "${username}@localhost" "exit" 2>/dev/null; then
-                log_info "Credenciales válidas!"
-
-                # Copiar clave SSH
-                log_info "Configurando acceso sin contraseña..."
-                if copy_ssh_key_to_device "${port}" "${username}" "${password}"; then
-                    save_device_credentials "${device_id}" "${username}" "false"
-                    log_info "Acceso sin contraseña configurado exitosamente"
-                else
-                    save_device_credentials "${device_id}" "${username}" "true"
-                    log_warning "No se pudo configurar acceso sin contraseña"
-                fi
-
-                # Conectar al dispositivo usando la clave SSH recién copiada
-                log_info "Conectando al dispositivo..."
-                ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p "${port}" "${username}@localhost"
-                return $?
-            else
-                log_error "Fallo la autenticación. Verifique usuario y contraseña."
-                return 1
-            fi
+        # Copiar clave SSH al dispositivo (esto también valida las credenciales)
+        log_info "Configurando acceso sin contraseña..."
+        if copy_ssh_key_to_device "${port}" "${username}" "${password}"; then
+            save_device_credentials "${device_id}" "${username}" "false"
+            log_info "Clave SSH copiada exitosamente"
         else
-            # Sin sshpass - modo interactivo
-            log_warning "sshpass no está instalado. Modo interactivo activado."
-            log_info "Instalarlo mejorará la experiencia: apt-get install sshpass"
-
-            # Intentar copiar clave SSH
-            log_info "Configurando acceso sin contraseña (ingrese la contraseña cuando se solicite)..."
-            if ssh-copy-id -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p "${port}" "${username}@localhost"; then
-                save_device_credentials "${device_id}" "${username}" "false"
-                log_info "Acceso sin contraseña configurado exitosamente"
-            else
-                save_device_credentials "${device_id}" "${username}" "true"
-                log_warning "No se pudo configurar acceso sin contraseña"
-            fi
-
-            # Conectar
-            log_info "Conectando al dispositivo..."
-            ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p "${port}" "${username}@localhost"
-            return $?
+            log_error "No se pudo copiar la clave SSH. Verifique las credenciales."
+            return 1
         fi
+
+        # Conectar al dispositivo usando la clave SSH recién copiada
+        log_info "Conectando al dispositivo..."
+        ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p "${port}" "${username}@localhost"
+        return $?
     fi
 }
 
