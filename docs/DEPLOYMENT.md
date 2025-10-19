@@ -64,14 +64,14 @@ sudo useradd -r -m -d /home/iot-tunnel -s /bin/bash iot-tunnel
 sudo mkdir -p /home/iot-tunnel/.ssh
 sudo mkdir -p /var/log/iot-ssh-tunnel
 sudo mkdir -p /var/lib/iot-ssh-tunnel/metrics
-sudo mkdir -p /var/run/iot-ssh-tunnel
+sudo mkdir -p /run/iot-ssh-tunnel
 
 # Establecer permisos
 sudo chown -R iot-tunnel:iot-tunnel /home/iot-tunnel
 sudo chmod 700 /home/iot-tunnel/.ssh
 sudo chown iot-tunnel:iot-tunnel /var/log/iot-ssh-tunnel
 sudo chown iot-tunnel:iot-tunnel /var/lib/iot-ssh-tunnel
-sudo chown iot-tunnel:iot-tunnel /var/run/iot-ssh-tunnel
+sudo chown iot-tunnel:iot-tunnel /run/iot-ssh-tunnel
 ```
 
 ### Paso 3: Clonar Repositorio
@@ -317,9 +317,9 @@ sudo chmod +x /usr/local/bin/iot-tunnel-start.sh
 sudo chmod +x /usr/local/bin/iot-tunnel-stop.sh
 
 # Crear directorios requeridos
-sudo mkdir -p /var/run/iot-ssh-tunnel
+sudo mkdir -p /run/iot-ssh-tunnel
 sudo mkdir -p /var/log/iot-ssh-tunnel
-sudo chmod 755 /var/run/iot-ssh-tunnel
+sudo chmod 755 /run/iot-ssh-tunnel
 sudo chmod 755 /var/log/iot-ssh-tunnel
 
 # Crear archivo known_hosts para evitar errores de solo lectura
@@ -458,7 +458,7 @@ cp client/systemd/iot-ssh-tunnel.conf /etc/tmpfiles.d/
 chmod +x /usr/local/bin/iot-tunnel-*.sh
 
 # Crear directorios y archivos requeridos
-mkdir -p /var/run/iot-ssh-tunnel /var/log/iot-ssh-tunnel
+mkdir -p /run/iot-ssh-tunnel /var/log/iot-ssh-tunnel
 touch /etc/iot-ssh-tunnel/known_hosts
 chmod 644 /etc/iot-ssh-tunnel/known_hosts
 systemd-tmpfiles --create /etc/tmpfiles.d/iot-ssh-tunnel.conf
@@ -576,9 +576,9 @@ Main process exited, code=exited, status=226/NAMESPACE
 **Solución:**
 ```bash
 # Crear directorios manualmente
-sudo mkdir -p /var/run/iot-ssh-tunnel
+sudo mkdir -p /run/iot-ssh-tunnel
 sudo mkdir -p /var/log/iot-ssh-tunnel
-sudo chmod 755 /var/run/iot-ssh-tunnel
+sudo chmod 755 /run/iot-ssh-tunnel
 sudo chmod 755 /var/log/iot-ssh-tunnel
 
 # Instalar configuración tmpfiles.d
@@ -715,7 +715,7 @@ sudo tail -f /var/log/iot-ssh-tunnel/tunnel.log
 - [ ] Par de claves SSH generado
 - [ ] Dispositivo registrado en servidor
 - [ ] Túnel configurado con puerto asignado
-- [ ] Directorios runtime creados (`/var/run/iot-ssh-tunnel`, `/var/log/iot-ssh-tunnel`)
+- [ ] Directorios runtime creados (`/run/iot-ssh-tunnel`, `/var/log/iot-ssh-tunnel`)
 - [ ] Archivo `known_hosts` creado (`/etc/iot-ssh-tunnel/known_hosts`)
 - [ ] Configuración tmpfiles.d instalada (`/etc/tmpfiles.d/iot-ssh-tunnel.conf`)
 - [ ] Servicio systemd instalado y habilitado
