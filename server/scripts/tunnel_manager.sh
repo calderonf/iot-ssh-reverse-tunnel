@@ -340,12 +340,35 @@ copy_ssh_key_to_device() {
         fi
     fi
 
+    # Preparar directorio .ssh en el dispositivo remoto
+    log_info "Preparando estructura .ssh en dispositivo remoto..."
+    if command -v sshpass &> /dev/null && [[ -n "${password}" ]]; then
+        sshpass -p "${password}" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p "${port}" "${username}@localhost" \
+            'mkdir -p ~/.ssh && chmod 700 ~/.ssh && touch ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys' 2>/dev/null
+
+        if [[ $? -ne 0 ]]; then
+            log_warning "No se pudo preparar el directorio .ssh automáticamente"
+        fi
+    fi
+
     log_info "Copiando clave SSH al dispositivo..."
 
     # Usar sshpass con ssh-copy-id si está disponible
     if command -v sshpass &> /dev/null && [[ -n "${password}" ]]; then
-        sshpass -p "${password}" ssh-copy-id -f -i "${ssh_key_priv}" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p "${port}" "${username}@localhost"
-        return $?
+        # Mostrar output para debug
+        local output
+        output=$(sshpass -p "${password}" ssh-copy-id -f -i "${ssh_key_priv}" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p "${port}" "${username}@localhost" 2>&1)
+        local result=$?
+
+        echo "${output}" | tee -a "${LOG_FILE}"
+
+        if [[ ${result} -eq 0 ]]; then
+            log_info "Clave SSH copiada exitosamente"
+            return 0
+        else
+            log_error "ssh-copy-id falló con código: ${result}"
+            return ${result}
+        fi
     else
         # Modo interactivo
         log_info "Ingrese la contraseña del dispositivo cuando se solicite:"
@@ -438,6 +461,87 @@ login_device() {
     fi
 }
 
+# Diagnosticar configuración SSH del dispositivo
+diagnose_device_ssh() {
+    local device_prefix="$1"
+    local username="${2:-}"
+    local password="${3:-}"
+
+    # Buscar dispositivo
+    log_info "Buscando dispositivo con prefijo '${device_prefix}'..."
+    local device_info
+    device_info=$(find_device_by_prefix "${device_prefix}")
+    local find_result=$?
+
+    if [[ ${find_result} -eq 1 ]]; then
+        log_error "Dispositivo no encontrado con prefijo '${device_prefix}'"
+        return 1
+    elif [[ ${find_result} -eq 2 ]]; then
+        log_error "Prefijo ambiguo. Use más caracteres para identificar el dispositivo."
+        return 1
+    fi
+
+    # Extraer información del dispositivo
+    IFS='|' read -r device_id port fingerprint reg_date status <<< "${device_info}"
+
+    log_info "Dispositivo encontrado: ${device_id}"
+    log_info "Puerto del túnel: ${port}"
+
+    # Verificar si el túnel está activo
+    if ! is_tunnel_active "${port}"; then
+        log_error "El túnel no está activo. El dispositivo debe estar conectado."
+        return 1
+    fi
+
+    # Obtener credenciales
+    local saved_creds
+    saved_creds=$(get_device_credentials "${device_id}")
+
+    if [[ -n "${saved_creds}" ]]; then
+        IFS='|' read -r saved_id saved_user has_password <<< "${saved_creds}"
+        if [[ -z "${username}" ]]; then
+            username="${saved_user}"
+        fi
+    fi
+
+    if [[ -z "${username}" ]]; then
+        read -p "Usuario para el dispositivo: " username
+    fi
+
+    if [[ -z "${password}" ]]; then
+        read -sp "Contraseña para el dispositivo: " password
+        echo ""
+    fi
+
+    log_info "Ejecutando diagnóstico SSH en el dispositivo..."
+
+    if command -v sshpass &> /dev/null && [[ -n "${password}" ]]; then
+        echo ""
+        echo "=== Diagnóstico SSH del Dispositivo ==="
+        echo ""
+
+        sshpass -p "${password}" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p "${port}" "${username}@localhost" << 'EOFDIAG'
+echo "Usuario actual: $(whoami)"
+echo "Home directory: $HOME"
+echo ""
+echo "Directorio .ssh:"
+ls -la ~/.ssh/ 2>/dev/null || echo "  No existe ~/.ssh/"
+echo ""
+echo "Archivo authorized_keys:"
+ls -la ~/.ssh/authorized_keys 2>/dev/null || echo "  No existe ~/.ssh/authorized_keys"
+echo ""
+echo "Contenido de authorized_keys:"
+cat ~/.ssh/authorized_keys 2>/dev/null || echo "  Archivo vacío o no existe"
+echo ""
+echo "Configuración SSH del servidor (sshd):"
+grep -E "^(PubkeyAuthentication|AuthorizedKeysFile)" /etc/ssh/sshd_config 2>/dev/null || echo "  No se puede leer sshd_config"
+EOFDIAG
+    else
+        log_error "sshpass no está instalado o no se proporcionó contraseña"
+        return 1
+    fi
+}
+
 # Exportar estado de túneles a JSON
 export_tunnel_status() {
     local output_file="${1:-/tmp/tunnel_status.json}"
@@ -507,6 +611,7 @@ COMANDOS:
   monitor [interval]         Monitorear túneles en tiempo real
   export [output_file]       Exportar estado a JSON
   login <prefix> [user] [pass]  Conectar a dispositivo por prefijo de ID
+  diagnose <prefix> [user] [pass] Diagnosticar configuración SSH del dispositivo
   help                       Mostrar esta ayuda
 
 EJEMPLOS:
@@ -571,6 +676,14 @@ main() {
                 exit 1
             fi
             login_device "$2" "${3:-}" "${4:-}"
+            ;;
+        diagnose)
+            if [[ $# -lt 2 ]]; then
+                log_error "Falta prefijo del device_id"
+                show_help
+                exit 1
+            fi
+            diagnose_device_ssh "$2" "${3:-}" "${4:-}"
             ;;
         help|--help|-h)
             show_help
