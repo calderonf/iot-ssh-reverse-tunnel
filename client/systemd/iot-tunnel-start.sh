@@ -42,7 +42,9 @@ log "Servidor: ${SERVER_USER}@${SERVER_HOST}:${SERVER_PORT}"
 log "Puerto túnel: ${TUNNEL_PORT}"
 
 # Establecer variables de entorno para autossh
-export AUTOSSH_PIDFILE="/var/run/iot-ssh-tunnel/autossh.pid"
+# Usar RuntimeDirectory de systemd si está disponible, sino usar /var/run
+RUNTIME_DIR="${RUNTIME_DIRECTORY:-/var/run/iot-ssh-tunnel}"
+export AUTOSSH_PIDFILE="${RUNTIME_DIR}/autossh.pid"
 export AUTOSSH_PORT="${AUTOSSH_PORT:-0}"
 export AUTOSSH_GATETIME=0
 

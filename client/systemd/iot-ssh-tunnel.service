@@ -12,6 +12,11 @@ Group=root
 # Directorio de trabajo
 WorkingDirectory=/etc/iot-ssh-tunnel
 
+# Directorios de runtime y logs
+RuntimeDirectory=iot-ssh-tunnel
+LogsDirectory=iot-ssh-tunnel
+StateDirectory=iot-ssh-tunnel
+
 # Variables de entorno para autossh
 Environment="AUTOSSH_GATETIME=0"
 Environment="AUTOSSH_PORT=0"

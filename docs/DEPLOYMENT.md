@@ -308,9 +308,26 @@ sudo cp /opt/iot-ssh-reverse-tunnel/client/systemd/iot-tunnel-start.sh \
 sudo cp /opt/iot-ssh-reverse-tunnel/client/systemd/iot-tunnel-stop.sh \
     /usr/local/bin/
 
+# Copiar configuración tmpfiles.d para crear directorios en el arranque
+sudo cp /opt/iot-ssh-reverse-tunnel/client/systemd/iot-ssh-tunnel.conf \
+    /etc/tmpfiles.d/
+
 # Establecer permisos
 sudo chmod +x /usr/local/bin/iot-tunnel-start.sh
 sudo chmod +x /usr/local/bin/iot-tunnel-stop.sh
+
+# Crear directorios requeridos
+sudo mkdir -p /var/run/iot-ssh-tunnel
+sudo mkdir -p /var/log/iot-ssh-tunnel
+sudo chmod 755 /var/run/iot-ssh-tunnel
+sudo chmod 755 /var/log/iot-ssh-tunnel
+
+# Crear archivo known_hosts para evitar errores de solo lectura
+sudo touch /etc/iot-ssh-tunnel/known_hosts
+sudo chmod 644 /etc/iot-ssh-tunnel/known_hosts
+
+# Aplicar configuración tmpfiles.d
+sudo systemd-tmpfiles --create /etc/tmpfiles.d/iot-ssh-tunnel.conf
 
 # Habilitar e iniciar servicio
 sudo systemctl daemon-reload
@@ -437,7 +454,14 @@ mkdir -p /etc/iot-ssh-tunnel
 # Configurar servicio
 cp client/systemd/iot-ssh-tunnel.service /etc/systemd/system/
 cp client/systemd/iot-tunnel-*.sh /usr/local/bin/
+cp client/systemd/iot-ssh-tunnel.conf /etc/tmpfiles.d/
 chmod +x /usr/local/bin/iot-tunnel-*.sh
+
+# Crear directorios y archivos requeridos
+mkdir -p /var/run/iot-ssh-tunnel /var/log/iot-ssh-tunnel
+touch /etc/iot-ssh-tunnel/known_hosts
+chmod 644 /etc/iot-ssh-tunnel/known_hosts
+systemd-tmpfiles --create /etc/tmpfiles.d/iot-ssh-tunnel.conf
 
 systemctl daemon-reload
 systemctl enable iot-ssh-tunnel
@@ -498,6 +522,177 @@ sudo systemctl restart iot-ssh-tunnel  # En dispositivos
 sudo systemctl restart iot-tunnel-monitor  # En servidor
 ```
 
+## Troubleshooting
+
+### Error: "ssh: Could not resolve hostname ssh"
+
+**Síntoma:**
+```bash
+ssh: Could not resolve hostname ssh: Name or service not known
+autossh[xxxx]: ssh exited with error status 255; restarting ssh
+```
+
+**Causa:** El comando autossh está mal formado y está interpretando "ssh" como un hostname en lugar de un comando.
+
+**Solución:** Este error fue corregido en las versiones actuales. Si lo encuentras, asegúrate de que:
+- Los scripts usen `SSH_ARGS` (solo argumentos) en lugar de `SSH_CMD` (que incluía "ssh")
+- El comando autossh debe ser: `autossh -M "${AUTOSSH_PORT}" ${SSH_ARGS}`
+- Actualiza los archivos desde el repositorio
+
+### Error: "Could not create directory '/root/.ssh'"
+
+**Síntoma:**
+```bash
+Could not create directory '/root/.ssh' (Read-only file system)
+Failed to add the host to the list of known hosts (/root/.ssh/known_hosts)
+```
+
+**Causa:** Las restricciones de seguridad de systemd (`ProtectSystem=strict`) impiden la escritura en `/root/.ssh`.
+
+**Solución:**
+```bash
+# Crear archivo known_hosts en ubicación permitida
+sudo touch /etc/iot-ssh-tunnel/known_hosts
+sudo chmod 644 /etc/iot-ssh-tunnel/known_hosts
+
+# Regenerar configuración para incluir UserKnownHostsFile
+sudo /opt/iot-ssh-reverse-tunnel/client/scripts/ssh_tunnel_setup.sh setup \
+    ${SERVER_HOST} 22 iot-tunnel ${ASSIGNED_PORT}
+
+# Verificar que /etc/iot-ssh-tunnel/tunnel.conf incluya:
+# SSH_OPTIONS="... -o UserKnownHostsFile=/etc/iot-ssh-tunnel/known_hosts"
+```
+
+### Error: "Failed to set up mount namespacing"
+
+**Síntoma:**
+```bash
+iot-ssh-tunnel.service: Failed to set up mount namespacing: /run/iot-ssh-tunnel: No such file or directory
+Main process exited, code=exited, status=226/NAMESPACE
+```
+
+**Causa:** Los directorios requeridos por systemd no existen.
+
+**Solución:**
+```bash
+# Crear directorios manualmente
+sudo mkdir -p /var/run/iot-ssh-tunnel
+sudo mkdir -p /var/log/iot-ssh-tunnel
+sudo chmod 755 /var/run/iot-ssh-tunnel
+sudo chmod 755 /var/log/iot-ssh-tunnel
+
+# Instalar configuración tmpfiles.d
+sudo cp /opt/iot-ssh-reverse-tunnel/client/systemd/iot-ssh-tunnel.conf \
+    /etc/tmpfiles.d/
+sudo systemd-tmpfiles --create /etc/tmpfiles.d/iot-ssh-tunnel.conf
+
+# Reiniciar servicio
+sudo systemctl daemon-reload
+sudo systemctl restart iot-ssh-tunnel
+```
+
+### Error: "remote port forwarding failed for listen port"
+
+**Síntoma:**
+```bash
+Error: remote port forwarding failed for listen port 10000
+ssh exited with error status 255
+```
+
+**Causas posibles:**
+1. El puerto ya está en uso en el servidor
+2. El puerto no está autorizado en la configuración SSH del servidor
+3. Hay una conexión previa que no se cerró correctamente
+
+**Solución:**
+
+**En el servidor:**
+```bash
+# Verificar si el puerto está en uso
+sudo ss -tlnp | grep :10000
+
+# Si hay una conexión colgada, terminarla
+sudo pkill -f "sshd.*:10000"
+
+# Verificar que el puerto esté autorizado en /etc/ssh/sshd_config.d/iot-tunnel.conf
+grep "PermitListen.*10000" /etc/ssh/sshd_config.d/iot-tunnel.conf
+
+# Si no está, agregarlo
+echo "PermitListen 10000" | sudo tee -a /etc/ssh/sshd_config.d/iot-tunnel.conf
+sudo systemctl reload ssh
+```
+
+**En el dispositivo:**
+```bash
+# Reintentar conexión
+sudo systemctl restart iot-ssh-tunnel
+sudo systemctl status iot-ssh-tunnel
+```
+
+### Servicio inactivo después de instalación
+
+**Síntoma:** El test de conectividad es exitoso pero `systemctl status` muestra el servicio inactivo.
+
+**Solución:**
+```bash
+# Verificar logs detallados
+sudo journalctl -u iot-ssh-tunnel -n 50 --no-pager
+
+# Verificar que todos los archivos estén en su lugar
+ls -la /usr/local/bin/iot-tunnel-start.sh
+ls -la /usr/local/bin/iot-tunnel-stop.sh
+ls -la /etc/systemd/system/iot-ssh-tunnel.service
+ls -la /etc/iot-ssh-tunnel/tunnel.conf
+
+# Reiniciar servicio con logs en tiempo real
+sudo systemctl restart iot-ssh-tunnel
+sudo journalctl -u iot-ssh-tunnel -f
+```
+
+### Verificación de conectividad
+
+**Comprobar que el túnel funciona correctamente:**
+
+**En el dispositivo:**
+```bash
+# Ver estado del servicio
+sudo systemctl status iot-ssh-tunnel
+
+# Ver logs en tiempo real
+sudo journalctl -u iot-ssh-tunnel -f
+
+# Verificar procesos autossh/ssh
+ps aux | grep -E "(autossh|ssh.*iot-tunnel)"
+```
+
+**En el servidor:**
+```bash
+# Listar túneles activos
+sudo /opt/iot-ssh-reverse-tunnel/server/scripts/tunnel_manager.sh list active
+
+# Verificar puerto específico
+sudo ss -tlnp | grep :10000
+
+# Intentar conexión SSH al dispositivo
+ssh -p 10000 localhost
+```
+
+### Logs útiles para debugging
+
+```bash
+# En el dispositivo - logs del servicio
+sudo journalctl -u iot-ssh-tunnel --no-pager -n 100
+
+# En el dispositivo - logs del script
+sudo tail -f /var/log/iot-ssh-tunnel/service.log
+
+# En el servidor - logs SSH
+sudo tail -f /var/log/auth.log | grep iot-tunnel
+
+# En el servidor - logs de túneles
+sudo tail -f /var/log/iot-ssh-tunnel/tunnel.log
+```
+
 ## Checklist de Deployment
 
 ### Servidor
@@ -520,6 +715,9 @@ sudo systemctl restart iot-tunnel-monitor  # En servidor
 - [ ] Par de claves SSH generado
 - [ ] Dispositivo registrado en servidor
 - [ ] Túnel configurado con puerto asignado
+- [ ] Directorios runtime creados (`/var/run/iot-ssh-tunnel`, `/var/log/iot-ssh-tunnel`)
+- [ ] Archivo `known_hosts` creado (`/etc/iot-ssh-tunnel/known_hosts`)
+- [ ] Configuración tmpfiles.d instalada (`/etc/tmpfiles.d/iot-ssh-tunnel.conf`)
 - [ ] Servicio systemd instalado y habilitado
 - [ ] Conectividad verificada
 
