@@ -21,7 +21,7 @@ DEFAULT_SERVER_PORT="22"
 DEFAULT_SERVER_USER="iot-tunnel"
 DEFAULT_TUNNEL_PORT=""
 DEFAULT_AUTOSSH_PORT="0"
-DEFAULT_SSH_OPTIONS="-o ServerAliveInterval=30 -o ServerAliveCountMax=3 -o ExitOnForwardFailure=yes -o StrictHostKeyChecking=accept-new"
+DEFAULT_SSH_OPTIONS="-o ServerAliveInterval=30 -o ServerAliveCountMax=3 -o ExitOnForwardFailure=yes -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=/etc/iot-ssh-tunnel/known_hosts"
 
 # Colores para output
 RED='\033[0;31m'
