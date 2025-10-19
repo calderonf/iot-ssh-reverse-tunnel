@@ -47,13 +47,13 @@ export AUTOSSH_PORT="${AUTOSSH_PORT:-0}"
 export AUTOSSH_GATETIME=0
 
 # Comando SSH
-SSH_CMD="ssh -N -R ${TUNNEL_PORT}:localhost:22 -i ${SSH_KEY} ${SSH_OPTIONS} -p ${SERVER_PORT} ${SERVER_USER}@${SERVER_HOST}"
+SSH_ARGS="-N -R ${TUNNEL_PORT}:localhost:22 -i ${SSH_KEY} ${SSH_OPTIONS} -p ${SERVER_PORT} ${SERVER_USER}@${SERVER_HOST}"
 
 # Usar autossh si está disponible, sino ssh directo
 if command -v autossh &> /dev/null; then
     log "Usando autossh para reconexión automática"
-    exec autossh -M "${AUTOSSH_PORT}" ${SSH_CMD}
+    exec autossh -M "${AUTOSSH_PORT}" ${SSH_ARGS}
 else
     log "autossh no disponible, usando ssh directo"
-    exec ${SSH_CMD}
+    exec ssh ${SSH_ARGS}
 fi

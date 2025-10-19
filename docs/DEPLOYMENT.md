@@ -258,7 +258,9 @@ sudo cat /etc/iot-ssh-tunnel/tunnel_key.pub
 
 **En el servidor**, ejecutar:
 
+
 ```bash
+DEVICE_ID=18e46... #el ID que generò en el dispositivo IOT
 # Copiar la clave pública del dispositivo a un archivo temporal
 # (Usar el output del paso anterior)
 cat > /tmp/device_${DEVICE_ID}.pub << 'EOF'

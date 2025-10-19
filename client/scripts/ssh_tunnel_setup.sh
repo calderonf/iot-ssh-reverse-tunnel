@@ -180,8 +180,7 @@ establish_tunnel() {
     log_info "  Servidor: ${SERVER_USER}@${SERVER_HOST}:${SERVER_PORT}"
     log_info "  Puerto túnel: ${TUNNEL_PORT}"
 
-    # Construir comando SSH
-    local ssh_cmd="ssh"
+    # Construir argumentos SSH
     local ssh_args="-N -R ${TUNNEL_PORT}:localhost:22 -i ${SSH_KEY} ${SSH_OPTIONS} -p ${SERVER_PORT} ${SERVER_USER}@${SERVER_HOST}"
 
     # Usar autossh si está disponible
@@ -194,7 +193,7 @@ establish_tunnel() {
         autossh -M "${AUTOSSH_PORT}" -f ${ssh_args}
     else
         log_warning "autossh no disponible, usando ssh directo"
-        ${ssh_cmd} ${ssh_args} &
+        ssh ${ssh_args} &
         echo $! > "${PID_FILE}"
     fi
 
