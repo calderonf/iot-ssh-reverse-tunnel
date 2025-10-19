@@ -357,17 +357,210 @@ sudo /opt/iot-ssh-reverse-tunnel/server/scripts/tunnel_manager.sh list active
 sudo /opt/iot-ssh-reverse-tunnel/server/scripts/tunnel_manager.sh check ${DEVICE_ID}
 ```
 
+## Acceso a Dispositivos
+
+### Gestión de Acceso con tunnel_manager.sh
+
+El script `tunnel_manager.sh` incluye un comando `login` que facilita enormemente el acceso a los dispositivos IoT a través de los túneles SSH. Esta herramienta:
+
+- Permite acceder a dispositivos usando solo los primeros 5+ caracteres del Device ID
+- Almacena credenciales de forma segura
+- Copia automáticamente las claves SSH en la primera conexión
+- Elimina la necesidad de recordar puertos asignados
+- Proporciona acceso sin contraseña después del primer login
+
+### Uso Básico del Comando Login
+
+**Sintaxis:**
+```bash
+sudo /opt/iot-ssh-reverse-tunnel/server/scripts/tunnel_manager.sh login <prefix> [usuario] [contraseña]
+```
+
+**Parámetros:**
+- `prefix`: Primeros 5 o más caracteres del Device ID
+- `usuario` (opcional): Usuario SSH del dispositivo
+- `contraseña` (opcional): Contraseña del usuario
+
+### Flujo de Trabajo - Primera Conexión
+
+1. **Listar dispositivos disponibles:**
+```bash
+# Ver todos los dispositivos registrados con túneles activos
+sudo /opt/iot-ssh-reverse-tunnel/server/scripts/tunnel_manager.sh list active
+```
+
+2. **Conectar usando prefijo del Device ID:**
+```bash
+# Usar los primeros 5-8 caracteres del Device ID
+sudo /opt/iot-ssh-reverse-tunnel/server/scripts/tunnel_manager.sh login a1b2c
+```
+
+3. **Ingresar credenciales (solo primera vez):**
+```
+Usuario para el dispositivo: pi
+Contraseña para el dispositivo: ********
+```
+
+4. **El script automáticamente:**
+   - Verifica que el túnel esté activo
+   - Valida las credenciales
+   - Copia las claves SSH públicas al dispositivo
+   - Guarda las credenciales en `/opt/iot-ssh-reverse-tunnel/server/configs/device_credentials`
+   - Establece la conexión SSH
+
+### Flujo de Trabajo - Conexiones Posteriores
+
+```bash
+# Simplemente usar el mismo comando
+sudo /opt/iot-ssh-reverse-tunnel/server/scripts/tunnel_manager.sh login a1b2c
+
+# ¡Ya no pedirá contraseña! La autenticación usa claves SSH
+```
+
+### Ejemplos de Uso
+
+**Conectar de forma interactiva:**
+```bash
+sudo /opt/iot-ssh-reverse-tunnel/server/scripts/tunnel_manager.sh login 18e46
+# Se solicitará usuario y contraseña si es la primera vez
+```
+
+**Conectar especificando usuario:**
+```bash
+sudo /opt/iot-ssh-reverse-tunnel/server/scripts/tunnel_manager.sh login 18e46 admin
+# Solo se solicitará contraseña
+```
+
+**Conectar con usuario y contraseña (no interactivo):**
+```bash
+sudo /opt/iot-ssh-reverse-tunnel/server/scripts/tunnel_manager.sh login 18e46 admin MySecurePass123
+# Útil para scripts de automatización
+```
+
+### Manejo de Errores Comunes
+
+**Error: Dispositivo no encontrado**
+```bash
+[ERROR] Dispositivo no encontrado con prefijo '123ab'
+```
+**Solución:** Verifica que el prefijo sea correcto usando `list`:
+```bash
+sudo /opt/iot-ssh-reverse-tunnel/server/scripts/tunnel_manager.sh list
+```
+
+**Error: Prefijo ambiguo**
+```bash
+[ERROR] Múltiples dispositivos encontrados con prefijo 'a1'
+a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6
+a1f9e8d7c6b5a4f3e2d1c0b9a8f7e6d5
+[ERROR] Prefijo ambiguo. Use más caracteres para identificar el dispositivo.
+```
+**Solución:** Usa un prefijo más largo (ej: `a1b2c` en lugar de `a1`)
+
+**Error: Túnel no está activo**
+```bash
+[ERROR] El túnel no está activo. El dispositivo debe estar conectado.
+```
+**Solución:** Verifica que el dispositivo esté conectado:
+```bash
+# En el dispositivo IoT
+sudo systemctl status iot-ssh-tunnel
+```
+
+**Error: Fallo de autenticación**
+```bash
+[ERROR] Fallo la autenticación. Verifique usuario y contraseña.
+```
+**Solución:** Verifica las credenciales del dispositivo y vuelve a intentar.
+
+### Gestión de Credenciales
+
+**Archivo de credenciales:**
+- Ubicación: `/opt/iot-ssh-reverse-tunnel/server/configs/device_credentials`
+- Permisos: `600` (solo lectura/escritura para el propietario)
+- Formato: `DEVICE_ID|USERNAME|HAS_PASSWORD`
+
+**Ver credenciales guardadas:**
+```bash
+sudo cat /opt/iot-ssh-reverse-tunnel/server/configs/device_credentials
+```
+
+**Eliminar credenciales de un dispositivo:**
+```bash
+# Para forzar reingreso de credenciales en próximo login
+sudo sed -i '/^a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6|/d' \
+    /opt/iot-ssh-reverse-tunnel/server/configs/device_credentials
+```
+
+### Recomendaciones de Seguridad
+
+1. **Instalar sshpass para mejor experiencia:**
+```bash
+sudo apt-get install sshpass
+```
+Sin `sshpass`, la copia de claves SSH requerirá ingresar la contraseña manualmente.
+
+2. **Usar claves SSH robustas:**
+El script generará automáticamente claves ED25519 si no existen:
+```bash
+# Verificar claves SSH del servidor
+ls -la ~/.ssh/id_*.pub
+```
+
+3. **Proteger el archivo de credenciales:**
+```bash
+# Verificar permisos
+ls -la /opt/iot-ssh-reverse-tunnel/server/configs/device_credentials
+
+# Debe mostrar: -rw------- (600)
+```
+
+4. **No versionar credenciales:**
+El archivo `device_credentials` está automáticamente excluido en `.gitignore`.
+
+### Ventajas del Comando Login
+
+✅ **Simplicidad**: No necesitas recordar puertos asignados
+✅ **Seguridad**: Usa autenticación por claves SSH después del primer login
+✅ **Rapidez**: Acceso con solo 5-8 caracteres del Device ID
+✅ **Automatización**: Soporta modo no interactivo para scripts
+✅ **Gestión centralizada**: Credenciales almacenadas de forma segura
+
 ## Verificación y Testing
 
 ### Test 1: Conectividad Básica
 
-**Desde el servidor:**
+**Desde el servidor (método directo):**
 
 ```bash
 # Conectar al dispositivo a través del túnel
 ssh -p ${ASSIGNED_PORT} localhost
 
 # Deberías ver el prompt del dispositivo IoT
+```
+
+**Desde el servidor (usando tunnel_manager.sh login):**
+
+```bash
+# Conectar usando prefijo del Device ID (más fácil y recomendado)
+sudo /opt/iot-ssh-reverse-tunnel/server/scripts/tunnel_manager.sh login a1b2c
+
+# Primera vez - se solicitará usuario y contraseña
+# Usuario para el dispositivo: pi
+# Contraseña para el dispositivo: ********
+
+# El script automáticamente:
+# - Encuentra el dispositivo por el prefijo del ID
+# - Verifica que el túnel esté activo
+# - Copia las claves SSH al dispositivo
+# - Guarda las credenciales de forma segura
+# - Abre una sesión SSH al dispositivo
+
+# Conexiones posteriores - NO requieren contraseña
+sudo /opt/iot-ssh-reverse-tunnel/server/scripts/tunnel_manager.sh login a1b2c
+
+# También puedes especificar usuario y contraseña directamente
+sudo /opt/iot-ssh-reverse-tunnel/server/scripts/tunnel_manager.sh login a1b2c myuser mypassword
 ```
 
 ### Test 2: Reconexión Automática

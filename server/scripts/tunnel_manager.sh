@@ -10,6 +10,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SERVER_CONFIG_DIR="${SCRIPT_DIR}/../configs"
 DEVICE_MAPPING_FILE="${SERVER_CONFIG_DIR}/device_mapping"
+DEVICE_CREDENTIALS_FILE="${SERVER_CONFIG_DIR}/device_credentials"
 LOG_FILE="/var/log/iot-ssh-tunnel/tunnel_manager.log"
 TUNNEL_STATUS_DIR="/var/run/iot-ssh-tunnel"
 SSH_PORT=22
@@ -46,6 +47,13 @@ initialize() {
     if [[ ! -f "${DEVICE_MAPPING_FILE}" ]]; then
         log_error "Archivo de mapeo de dispositivos no encontrado: ${DEVICE_MAPPING_FILE}"
         exit 1
+    fi
+
+    # Crear archivo de credenciales si no existe (con permisos restrictivos)
+    if [[ ! -f "${DEVICE_CREDENTIALS_FILE}" ]]; then
+        touch "${DEVICE_CREDENTIALS_FILE}"
+        chmod 600 "${DEVICE_CREDENTIALS_FILE}"
+        log_info "Archivo de credenciales creado: ${DEVICE_CREDENTIALS_FILE}"
     fi
 }
 
@@ -263,6 +271,190 @@ monitor_tunnels() {
     done
 }
 
+# Buscar dispositivo por ID parcial (primeros 5+ caracteres)
+find_device_by_prefix() {
+    local prefix="$1"
+    local matches
+
+    if [[ ${#prefix} -lt 5 ]]; then
+        log_error "El prefijo debe tener al menos 5 caracteres"
+        return 1
+    fi
+
+    matches=$(grep "^${prefix}" "${DEVICE_MAPPING_FILE}" 2>/dev/null || true)
+
+    if [[ -z "${matches}" ]]; then
+        return 1
+    fi
+
+    local count
+    count=$(echo "${matches}" | wc -l)
+
+    if [[ ${count} -gt 1 ]]; then
+        log_error "Múltiples dispositivos encontrados con prefijo '${prefix}':"
+        echo "${matches}" | cut -d'|' -f1
+        return 2
+    fi
+
+    echo "${matches}"
+    return 0
+}
+
+# Guardar credenciales de dispositivo
+save_device_credentials() {
+    local device_id="$1"
+    local username="$2"
+    local has_password="${3:-false}"
+
+    # Eliminar credenciales anteriores si existen
+    if grep -q "^${device_id}|" "${DEVICE_CREDENTIALS_FILE}" 2>/dev/null; then
+        sed -i "/^${device_id}|/d" "${DEVICE_CREDENTIALS_FILE}"
+    fi
+
+    # Guardar nuevas credenciales
+    echo "${device_id}|${username}|${has_password}" >> "${DEVICE_CREDENTIALS_FILE}"
+    log_info "Credenciales guardadas para dispositivo ${device_id:0:8}..."
+}
+
+# Obtener credenciales de dispositivo
+get_device_credentials() {
+    local device_id="$1"
+
+    grep "^${device_id}|" "${DEVICE_CREDENTIALS_FILE}" 2>/dev/null || true
+}
+
+# Copiar clave SSH al dispositivo
+copy_ssh_key_to_device() {
+    local port="$1"
+    local username="$2"
+    local password="$3"
+
+    # Verificar si existe clave SSH del servidor
+    local ssh_key="${HOME}/.ssh/id_rsa.pub"
+    if [[ ! -f "${ssh_key}" ]]; then
+        ssh_key="${HOME}/.ssh/id_ed25519.pub"
+        if [[ ! -f "${ssh_key}" ]]; then
+            log_warning "No se encontró clave SSH pública. Generando nueva clave..."
+            ssh-keygen -t ed25519 -f "${HOME}/.ssh/id_ed25519" -N "" -C "tunnel-manager@$(hostname)"
+            ssh_key="${HOME}/.ssh/id_ed25519.pub"
+        fi
+    fi
+
+    log_info "Copiando clave SSH al dispositivo..."
+
+    # Usar sshpass si está disponible, de lo contrario, usar ssh-copy-id interactivo
+    if command -v sshpass &> /dev/null && [[ -n "${password}" ]]; then
+        sshpass -p "${password}" ssh-copy-id -o StrictHostKeyChecking=no -p "${port}" "${username}@localhost" 2>&1 | tee -a "${LOG_FILE}"
+        return $?
+    else
+        log_info "Ingrese la contraseña cuando se solicite:"
+        ssh-copy-id -o StrictHostKeyChecking=no -p "${port}" "${username}@localhost" 2>&1 | tee -a "${LOG_FILE}"
+        return $?
+    fi
+}
+
+# Login a dispositivo
+login_device() {
+    local device_prefix="$1"
+    local username="${2:-}"
+    local password="${3:-}"
+
+    # Buscar dispositivo
+    log_info "Buscando dispositivo con prefijo '${device_prefix}'..."
+    local device_info
+    device_info=$(find_device_by_prefix "${device_prefix}")
+    local find_result=$?
+
+    if [[ ${find_result} -eq 1 ]]; then
+        log_error "Dispositivo no encontrado con prefijo '${device_prefix}'"
+        return 1
+    elif [[ ${find_result} -eq 2 ]]; then
+        log_error "Prefijo ambiguo. Use más caracteres para identificar el dispositivo."
+        return 1
+    fi
+
+    # Extraer información del dispositivo
+    IFS='|' read -r device_id port fingerprint reg_date status <<< "${device_info}"
+
+    log_info "Dispositivo encontrado: ${device_id}"
+    log_info "Puerto del túnel: ${port}"
+    log_info "Estado: ${status}"
+
+    # Verificar si el túnel está activo
+    if ! is_tunnel_active "${port}"; then
+        log_error "El túnel no está activo. El dispositivo debe estar conectado."
+        return 1
+    fi
+
+    # Obtener credenciales guardadas
+    local saved_creds
+    saved_creds=$(get_device_credentials "${device_id}")
+
+    if [[ -n "${saved_creds}" ]]; then
+        # Usar credenciales guardadas
+        IFS='|' read -r saved_id saved_user has_password <<< "${saved_creds}"
+
+        if [[ -z "${username}" ]]; then
+            username="${saved_user}"
+            log_info "Usando usuario guardado: ${username}"
+        fi
+
+        # Intentar conectar sin contraseña (con clave SSH)
+        log_info "Conectando al dispositivo ${device_id:0:8}... en localhost:${port}"
+        ssh -o StrictHostKeyChecking=no -p "${port}" "${username}@localhost"
+        return $?
+    else
+        # Primera vez - solicitar credenciales
+        if [[ -z "${username}" ]]; then
+            read -p "Usuario para el dispositivo: " username
+        fi
+
+        if [[ -z "${password}" ]]; then
+            read -sp "Contraseña para el dispositivo: " password
+            echo ""
+        fi
+
+        # Intentar conexión inicial
+        log_info "Probando conexión inicial..."
+        if command -v sshpass &> /dev/null; then
+            if sshpass -p "${password}" ssh -o StrictHostKeyChecking=no -o BatchMode=no -p "${port}" "${username}@localhost" "echo 'Conexión exitosa'" 2>/dev/null; then
+                log_info "Conexión exitosa!"
+
+                # Copiar clave SSH
+                if copy_ssh_key_to_device "${port}" "${username}" "${password}"; then
+                    log_info "Clave SSH copiada exitosamente"
+                    save_device_credentials "${device_id}" "${username}" "false"
+                else
+                    log_warning "No se pudo copiar la clave SSH. Se guardará la contraseña para próximas conexiones."
+                    save_device_credentials "${device_id}" "${username}" "true"
+                fi
+
+                # Conectar al dispositivo
+                log_info "Conectando al dispositivo..."
+                ssh -o StrictHostKeyChecking=no -p "${port}" "${username}@localhost"
+                return $?
+            else
+                log_error "Fallo la autenticación. Verifique usuario y contraseña."
+                return 1
+            fi
+        else
+            log_warning "sshpass no está instalado. Instalarlo mejorará la experiencia: apt-get install sshpass"
+            log_info "Conectando al dispositivo (ingrese contraseña cuando se solicite)..."
+
+            # Intentar copiar clave SSH sin sshpass
+            if ssh-copy-id -o StrictHostKeyChecking=no -p "${port}" "${username}@localhost" 2>&1 | tee -a "${LOG_FILE}"; then
+                save_device_credentials "${device_id}" "${username}" "false"
+            else
+                save_device_credentials "${device_id}" "${username}" "true"
+            fi
+
+            # Conectar
+            ssh -o StrictHostKeyChecking=no -p "${port}" "${username}@localhost"
+            return $?
+        fi
+    fi
+}
+
 # Exportar estado de túneles a JSON
 export_tunnel_status() {
     local output_file="${1:-/tmp/tunnel_status.json}"
@@ -331,6 +523,7 @@ COMANDOS:
   close <device_id>          Cerrar túnel de dispositivo
   monitor [interval]         Monitorear túneles en tiempo real
   export [output_file]       Exportar estado a JSON
+  login <prefix> [user] [pass]  Conectar a dispositivo por prefijo de ID
   help                       Mostrar esta ayuda
 
 EJEMPLOS:
@@ -340,6 +533,15 @@ EJEMPLOS:
   $(basename "$0") close a1b2c3d4...
   $(basename "$0") monitor 10
   $(basename "$0") export /tmp/status.json
+  $(basename "$0") login a1b2c            # Conectar con prefijo (interactivo)
+  $(basename "$0") login a1b2c myuser     # Conectar con usuario
+  $(basename "$0") login a1b2c myuser mypass  # Conectar con usuario y contraseña
+
+NOTAS SOBRE LOGIN:
+  - El prefijo debe tener al menos 5 caracteres del DEVICE_ID
+  - En la primera conexión se copiarán las claves SSH automáticamente
+  - Las conexiones posteriores no requerirán contraseña
+  - Se recomienda instalar 'sshpass' para mejor experiencia
 
 EOF
 }
@@ -378,6 +580,14 @@ main() {
             ;;
         export)
             export_tunnel_status "${2:-/tmp/tunnel_status.json}"
+            ;;
+        login)
+            if [[ $# -lt 2 ]]; then
+                log_error "Falta prefijo del device_id"
+                show_help
+                exit 1
+            fi
+            login_device "$2" "${3:-}" "${4:-}"
             ;;
         help|--help|-h)
             show_help

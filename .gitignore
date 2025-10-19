@@ -77,6 +77,8 @@ tunnel_key.*
 # Datos sensibles
 device_mapping
 !device_mapping.example
+device_credentials
+!device_credentials.example
 authorized_keys
 known_hosts
 *.secret
