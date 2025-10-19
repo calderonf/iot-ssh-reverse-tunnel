@@ -101,7 +101,6 @@ generate_custom_id() {
         return 1
     fi
 
-    log_info "ID generado desde datos personalizados"
     echo -n "${custom_data}" | md5sum | awk '{print $1}'
     return 0
 }
