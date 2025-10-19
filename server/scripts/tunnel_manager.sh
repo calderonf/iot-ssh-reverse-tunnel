@@ -343,31 +343,49 @@ copy_ssh_key_to_device() {
     # Preparar directorio .ssh en el dispositivo remoto
     log_info "Preparando estructura .ssh en dispositivo remoto..."
     if command -v sshpass &> /dev/null && [[ -n "${password}" ]]; then
-        sshpass -p "${password}" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p "${port}" "${username}@localhost" \
-            'mkdir -p ~/.ssh && chmod 700 ~/.ssh && touch ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys' 2>/dev/null
+        local prep_output
+        prep_output=$(sshpass -p "${password}" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p "${port}" "${username}@localhost" \
+            'mkdir -p ~/.ssh && chmod 700 ~/.ssh && touch ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys && echo "OK"' 2>&1)
 
-        if [[ $? -ne 0 ]]; then
-            log_warning "No se pudo preparar el directorio .ssh automáticamente"
+        if echo "${prep_output}" | grep -q "OK"; then
+            log_info "Directorio .ssh preparado correctamente"
+        else
+            log_warning "Advertencia al preparar .ssh: ${prep_output}"
         fi
     fi
 
     log_info "Copiando clave SSH al dispositivo..."
 
+    # Leer la clave pública
+    local pub_key
+    pub_key=$(cat "${ssh_key_priv}.pub")
+
     # Usar sshpass con ssh-copy-id si está disponible
     if command -v sshpass &> /dev/null && [[ -n "${password}" ]]; then
-        # Mostrar output para debug
+        # Método 1: Intentar con ssh-copy-id
+        log_info "Intentando con ssh-copy-id..."
         local output
         output=$(sshpass -p "${password}" ssh-copy-id -f -i "${ssh_key_priv}" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p "${port}" "${username}@localhost" 2>&1)
         local result=$?
 
-        echo "${output}" | tee -a "${LOG_FILE}"
+        echo "${output}"
 
-        if [[ ${result} -eq 0 ]]; then
-            log_info "Clave SSH copiada exitosamente"
+        if [[ ${result} -eq 0 ]] && echo "${output}" | grep -q "Number of key(s) added"; then
+            log_info "Clave SSH copiada exitosamente con ssh-copy-id"
             return 0
         else
-            log_error "ssh-copy-id falló con código: ${result}"
-            return ${result}
+            # Método 2: Copiar manualmente usando echo
+            log_warning "ssh-copy-id falló. Intentando método manual..."
+            sshpass -p "${password}" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p "${port}" "${username}@localhost" \
+                "mkdir -p ~/.ssh && chmod 700 ~/.ssh && echo '${pub_key}' >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys && echo 'Clave agregada'"
+
+            if [[ $? -eq 0 ]]; then
+                log_info "Clave SSH copiada exitosamente con método manual"
+                return 0
+            else
+                log_error "No se pudo copiar la clave SSH"
+                return 1
+            fi
         fi
     else
         # Modo interactivo
@@ -423,10 +441,40 @@ login_device() {
             log_info "Usando usuario guardado: ${username}"
         fi
 
-        # Intentar conectar sin contraseña (con clave SSH)
+        # Intentar conectar sin contraseña (con clave SSH) - usar PasswordAuthentication=no para forzar uso de claves
         log_info "Conectando al dispositivo ${device_id:0:8}... en localhost:${port}"
-        ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p "${port}" "${username}@localhost"
-        return $?
+        if ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o PasswordAuthentication=no -o BatchMode=yes -p "${port}" "${username}@localhost" "exit" 2>/dev/null; then
+            # La clave SSH funciona, conectar normalmente
+            ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p "${port}" "${username}@localhost"
+            return $?
+        else
+            # La clave SSH no funciona, necesitamos reconfigurar
+            log_warning "Las claves SSH no están configuradas correctamente. Reconfigurando..."
+
+            # Pedir contraseña si no se proporcionó
+            if [[ -z "${password}" ]]; then
+                read -sp "Contraseña para el dispositivo: " password
+                echo ""
+            fi
+
+            if [[ -z "${password}" ]]; then
+                log_error "Se requiere contraseña para reconfigurar el acceso"
+                return 1
+            fi
+
+            # Reconfigurar claves SSH
+            if copy_ssh_key_to_device "${port}" "${username}" "${password}"; then
+                save_device_credentials "${device_id}" "${username}" "false"
+                log_info "Clave SSH reconfigurada exitosamente"
+
+                # Conectar usando la clave recién copiada
+                ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p "${port}" "${username}@localhost"
+                return $?
+            else
+                log_error "No se pudo reconfigurar la clave SSH"
+                return 1
+            fi
+        fi
     else
         # Primera vez - solicitar credenciales si no se proporcionaron
         if [[ -z "${username}" ]]; then
