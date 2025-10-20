@@ -66,7 +66,7 @@ Genera un identificador único basado en características del hardware del dispo
 # Generar Device ID
 sudo ./device_identifier.sh get
 
-# Con semilla personalizada
+# Con semilla personalizada (RECOMENDADO)
 sudo ./device_identifier.sh get "mi-semilla-personalizada"
 ```
 

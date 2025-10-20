@@ -20,10 +20,11 @@ Esta guía proporciona información detallada sobre la instalación, configuraci
 ### Servidor Central
 
 **Hardware:**
+Se hacen pruebas con máquina Standard_B1s de azure
 - CPU: 1 vCPUs mínimo
 - RAM: 1GB mínimo
 - Disco: 30GB mínimo
-- Red: IP pública estática se hacen pruebas con máquina Standard_B1s de azure
+- Red: IP pública estática 
 
 **Software:**
 - Sistema operativo: Debian 11+ o Ubuntu 20.04+
@@ -47,6 +48,8 @@ Esta guía proporciona información detallada sobre la instalación, configuraci
 - OpenSSH Client 7.0+
 - Autossh (recomendado)
 - Systemd (para servicio automático)
+___
+___
 
 ## Configuración del Servidor
 
@@ -204,6 +207,8 @@ sudo systemctl start iot-tunnel-monitor
 sudo systemctl status iot-tunnel-monitor
 ```
 Si esta trabajando en una màquina virtual en la nube, por favor abra los puertos correspondientes
+___
+___
 
 ## Configuración de Dispositivos IoT
 
@@ -328,6 +333,7 @@ sudo /opt/iot-ssh-reverse-tunnel/server/scripts/tunnel_manager.sh list active
 sudo /opt/iot-ssh-reverse-tunnel/server/scripts/tunnel_manager.sh login a1b2c
 ```
 
+---
 ---
 
 ## Método 2: Configuración Manual (Avanzada)
@@ -491,7 +497,7 @@ sudo /opt/iot-ssh-reverse-tunnel/server/scripts/tunnel_manager.sh list active
 sudo /opt/iot-ssh-reverse-tunnel/server/scripts/tunnel_manager.sh check ${DEVICE_ID}
 ```
 
-## Acceso a Dispositivos
+## Acceso a Dispositivos Desde el Servidor
 
 ### Gestión de Acceso con tunnel_manager.sh
 
@@ -519,6 +525,8 @@ sudo /opt/iot-ssh-reverse-tunnel/server/scripts/tunnel_manager.sh login <prefix>
 
 1. **Listar dispositivos disponibles:**
 ```bash
+# Ver todos los dispositivos registrados con túneles activos y no activos
+sudo /opt/iot-ssh-reverse-tunnel/server/scripts/tunnel_manager.sh list
 # Ver todos los dispositivos registrados con túneles activos
 sudo /opt/iot-ssh-reverse-tunnel/server/scripts/tunnel_manager.sh list active
 ```
