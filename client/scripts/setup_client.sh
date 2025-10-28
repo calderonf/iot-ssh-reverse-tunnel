@@ -281,6 +281,10 @@ install_systemd_service() {
     touch "${CONFIG_DIR}/known_hosts"
     chmod 644 "${CONFIG_DIR}/known_hosts"
 
+    # Pre-crear directorio .ssh de root para evitar errores de permisos
+    mkdir -p /root/.ssh
+    chmod 700 /root/.ssh
+
     # Copiar archivos systemd
     local systemd_dir="${PROJECT_ROOT}/client/systemd"
 

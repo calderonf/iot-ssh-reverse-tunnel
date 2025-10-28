@@ -103,10 +103,12 @@ sudo chmod +x security/*.sh
 # Copiar configuración endurecida
 sudo cp server/configs/sshd_config.d/iot-tunnel.conf /etc/ssh/sshd_config.d/
 
-# Ajusta la lista `PermitListen` dentro del archivo para reflejar los puertos autorizados. por defecto solo hay 3, 
-#PermitListen 10000
-#PermitListen 10001
-#PermitListen 10002
+# ⚠️ IMPORTANTE: Verificar que PermitListen esté en UNA SOLA LÍNEA
+# Bug de OpenSSH: múltiples líneas PermitListen en Match solo aplica la primera
+# Debe verse así:
+#   PermitListen localhost:10000 localhost:10001 localhost:10002 localhost:10003
+#
+# Para agregar más puertos, editar esa línea añadiendo: localhost:10004 localhost:10005 etc.
 
 # (Opcional) Instalar script de contención
 sudo cp server/scripts/tunnel-only.sh /usr/local/bin/
@@ -930,31 +932,107 @@ sudo systemctl restart iot-ssh-tunnel
 
 **Síntoma:**
 ```bash
-Error: remote port forwarding failed for listen port 10000
+Error: remote port forwarding failed for listen port 10001
 ssh exited with error status 255
+autossh[xxxx]: ssh exited with error status 255; restarting ssh
+```
+
+**Logs del servidor:**
+```bash
+Received request from X.X.X.X port XXXXX to remote forward to host localhost port 10001, but the request was denied.
 ```
 
 **Causas posibles:**
-1. El puerto ya está en uso en el servidor
-2. El puerto no está autorizado en la configuración SSH del servidor
-3. Hay una conexión previa que no se cerró correctamente
+1. ⚠️ **CAUSA MÁS COMÚN:** Bug de OpenSSH con múltiples líneas `PermitListen` (ver abajo)
+2. El puerto ya está en uso en el servidor
+3. El puerto no está autorizado en la configuración SSH del servidor
+4. Hay una conexión previa que no se cerró correctamente
 
-**Solución:**
+---
+
+## ⚠️ CAUSA #1: Bug Crítico de OpenSSH - Múltiples `PermitListen`
+
+**PROBLEMA:** OpenSSH tiene un bug donde solo la **primera línea** de `PermitListen` dentro de un bloque `Match` se aplica correctamente.
+
+**SÍNTOMA:** El primer dispositivo (puerto 10000) funciona, pero los siguientes fallan.
+
+**DIAGNÓSTICO:**
+
+```bash
+# Ver configuración del archivo
+sudo cat /etc/ssh/sshd_config.d/iot-tunnel.conf | grep PermitListen
+
+# Si ves múltiples líneas como esto:
+#   PermitListen 10000
+#   PermitListen 10001
+#   PermitListen 10002
+# ⚠️ ESTO ESTÁ MAL - Solo 10000 funcionará
+
+# Verificar qué puertos reconoce SSH
+sudo sshd -T -C user=iot-tunnel | grep permitlisten
+
+# Si solo muestra:
+#   permitlisten *:10000
+# ⚠️ CONFIRMADO - Solo el primer puerto está activo
+```
+
+**SOLUCIÓN:**
+
+1. **Editar el archivo de configuración SSH:**
+```bash
+sudo nano /etc/ssh/sshd_config.d/iot-tunnel.conf
+```
+
+2. **Buscar la sección `Match User iot-tunnel` y cambiar:**
+```bash
+# ❌ INCORRECTO (bug de OpenSSH - solo funciona el primero)
+Match User iot-tunnel
+    PermitListen 10000
+    PermitListen 10001
+    PermitListen 10002
+    PermitListen 10003
+
+# ✅ CORRECTO (todos los puertos en UNA SOLA LÍNEA)
+Match User iot-tunnel
+    PermitListen localhost:10000 localhost:10001 localhost:10002 localhost:10003
+```
+
+3. **Verificar y aplicar cambios:**
+```bash
+# Verificar sintaxis
+sudo sshd -t
+
+# Recargar SSH (sin cortar conexiones existentes)
+sudo systemctl reload ssh
+
+# Verificar que todos los puertos estén activos
+sudo sshd -T -C user=iot-tunnel | grep permitlisten
+
+# Debe mostrar:
+#   permitlisten localhost:10000 localhost:10001 localhost:10002 localhost:10003
+```
+
+4. **En el cliente, reiniciar el túnel:**
+```bash
+sudo systemctl restart iot-ssh-tunnel
+sudo journalctl -u iot-ssh-tunnel -f
+```
+
+---
+
+## Otras verificaciones si el problema persiste
 
 **En el servidor:**
+
 ```bash
 # Verificar si el puerto está en uso
-sudo ss -tlnp | grep :10000
+sudo ss -tlnp | grep :10001
 
 # Si hay una conexión colgada, terminarla
-sudo pkill -f "sshd.*:10000"
+sudo pkill -f "sshd.*:10001"
 
-# Verificar que el puerto esté autorizado en /etc/ssh/sshd_config.d/iot-tunnel.conf
-grep "PermitListen.*10000" /etc/ssh/sshd_config.d/iot-tunnel.conf
-
-# Si no está, agregarlo
-echo "PermitListen 10000" | sudo tee -a /etc/ssh/sshd_config.d/iot-tunnel.conf
-sudo systemctl reload ssh
+# Ver logs de autenticación en tiempo real
+sudo tail -f /var/log/auth.log | grep iot-tunnel
 ```
 
 **En el dispositivo:**

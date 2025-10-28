@@ -8,6 +8,32 @@ Solución completa y segura para acceso remoto a dispositivos IoT mediante túne
 
 ---
 
+## ⚠️ ADVERTENCIA CRÍTICA - Bug de OpenSSH `PermitListen`
+
+**PROBLEMA:** OpenSSH tiene un bug conocido donde múltiples directivas `PermitListen` dentro de un bloque `Match` solo aplican la **primera línea**.
+
+**SÍNTOMA:** Los dispositivos fallan con error: `remote port forwarding failed for listen port XXXXX`
+
+**SOLUCIÓN:** Usar **UNA SOLA LÍNEA** con todos los puertos:
+
+```bash
+# ❌ INCORRECTO - Solo funciona el puerto 10000
+Match User iot-tunnel
+    PermitListen 10000
+    PermitListen 10001
+    PermitListen 10002
+
+# ✅ CORRECTO - Funcionan todos los puertos
+Match User iot-tunnel
+    PermitListen localhost:10000 localhost:10001 localhost:10002 localhost:10003
+```
+
+**Verificar:** `sudo sshd -T -C user=iot-tunnel | grep permitlisten` debe mostrar **todos** los puertos.
+
+📖 Ver [DEPLOYMENT.md - Troubleshooting](docs/DEPLOYMENT.md#error-remote-port-forwarding-failed-for-listen-port) para más detalles.
+
+---
+
 ## 🚀 Inicio Rápido
 
 ### ¿Primera vez usando el sistema?
